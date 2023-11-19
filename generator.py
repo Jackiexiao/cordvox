@@ -95,7 +95,9 @@ class HarmonicGenerator(nn.Module):
             sample_rate=48000,
             segment_size=960,
             num_harmonics=16,
-            base_frequency=128,
+            base_frequency=440,
+            f0_min = 0,
+            f0_max = 24000,
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
@@ -104,6 +106,8 @@ class HarmonicGenerator(nn.Module):
         self.segment_size = segment_size
         self.base_frequency = base_frequency
         self.num_harmonics = num_harmonics
+        self.f0_min = f0_min
+        self.f0_max = f0_max
     
     # x = extracted features, phi = phase status
     def forward(self, x):
@@ -116,6 +120,7 @@ class HarmonicGenerator(nn.Module):
         octave = self.to_octave(x)
         mag = torch.exp(self.to_mag(x).clamp_max(6.0))
         f0 = self.base_frequency * 2 ** octave # to Hz
+        f0 = torch.clamp(f0, self.f0_min, self.f0_max)
 
         # frequency multiplyer
         mul = (torch.arange(Nh, device=x.device) + 1).unsqueeze(0).unsqueeze(2).expand(N, Nh, Lf)
