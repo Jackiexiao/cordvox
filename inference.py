@@ -67,7 +67,7 @@ for i, path in enumerate(paths):
                 chunk = torch.cat([chunk, torch.zeros(1, args.chunk - chunk.shape[1])], dim=1)
             chunk = chunk.to(device)
 
-            chunk = G.forward_without_t(log_mel(chunk), args.noise, args.harmonics)
+            chunk = G.forward_without_phi(log_mel(chunk), args.noise, args.harmonics)
             
             chunk = chunk[:, args.chunk:-args.chunk]
 

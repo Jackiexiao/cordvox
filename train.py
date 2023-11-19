@@ -111,7 +111,7 @@ for epoch in range(args.epoch):
         # Train G.
         OptG.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
-            wave_fake = G.forward_without_t(spec)
+            wave_fake = G.forward_without_phi(spec)
             
             loss_adv = 0
             logits = D.logits(cut_center_wav(wave_fake))
