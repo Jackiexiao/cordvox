@@ -78,9 +78,10 @@ class HarmonicGenerator(nn.Module):
             self,
             input_channels=256,
             sample_rate=48000,
-            segment_size=480,
+            segment_size=960,
             num_harmonics=8,
             base_frequency=220,
+            min_frequency=20,
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics*2, 1)
@@ -89,6 +90,7 @@ class HarmonicGenerator(nn.Module):
         self.segment_size = segment_size
         self.base_frequency = base_frequency
         self.num_harmonics = num_harmonics
+        self.min_frequency = min_frequency
     
     # x = extracted features, t = time(seconds)
     def forward(self, x, t):
@@ -101,6 +103,7 @@ class HarmonicGenerator(nn.Module):
         pitch = self.to_pitch(x)
         mag = self.to_mag(x)
         f0 = self.base_frequency * 2 ** pitch
+        f0 = f0.clamp_min(self.min_frequency)
         mag_cos, mag_sin = torch.chunk(mag, 2, dim=1)
         
         # frequency multiplyer
@@ -137,7 +140,7 @@ class NoiseGenerator(nn.Module):
     def __init__(
             self,
             input_channels=256,
-            upsample_rates=[10, 8, 3, 2],
+            upsample_rates=[10, 8, 4, 3],
             channels=[32, 16, 8, 4],
             kernel_size=15,
             ):
@@ -174,7 +177,7 @@ class ConvFilter(nn.Module):
             self,
             input_channels=256,
             mid_channels=8,
-            segment_size=480,
+            segment_size=960,
             kernel_size=40,
             ):
         super().__init__()
@@ -190,14 +193,14 @@ class ConvFilter(nn.Module):
         w = self.wave_in(w) * s
         w = F.leaky_relu(w, LRELU_SLOPE)
         w = self.wave_out(w)
-        return w + res
+        return w
 
 
 class Generator(nn.Module):
     def __init__(
             self,
             input_channels=80,
-            segment_size=480,
+            segment_size=960,
             sample_rate=48000
             ):
         super().__init__()

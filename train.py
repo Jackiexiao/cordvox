@@ -93,8 +93,8 @@ step_count = 0
 
 mel = torchaudio.transforms.MelSpectrogram(
         sample_rate=48000,
-        n_fft=1920,
-        hop_length=480,
+        n_fft=3840,
+        hop_length=960,
         n_mels=80
         ).to(device)
 
