@@ -1,5 +1,6 @@
 # CordVox
 a neuwal vocoder for next-generation voice conversion
+(this is experimental repository. contents can be changed without notification.)
 
 ## Features
 - fast
