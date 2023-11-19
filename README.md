@@ -1,2 +1,8 @@
-# cordvox
-experiments of fast, lightweight, high-quality neural vocoder for single speaker's speech synthesization
+# CordVox
+a neuwal vocoder for next-generation voice conversion
+
+## Features
+- fast
+- low-latency
+- high-quality (sampling rate is 48kHz)
+- able to realtime inference on consumer CPU.
