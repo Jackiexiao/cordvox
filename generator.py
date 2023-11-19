@@ -186,11 +186,12 @@ class ConvFilter(nn.Module):
     # x: extracted features [N, 1, Lf], w: generated waves [N, 1, Lw]
     # Output: [N, 1, Lw]
     def forward(self, x, w):
+        res = w
         s = self.feature2scale(x)
         w = self.wave_in(w) * s
         w = F.leaky_relu(w, LRELU_SLOPE)
         w = self.wave_out(w)
-        return w
+        return w + res
 
 
 class Generator(nn.Module):
