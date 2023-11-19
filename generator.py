@@ -112,7 +112,7 @@ class HarmonicGenerator(nn.Module):
         f0 = F.interpolate(f0, Lw, mode='linear')
 
         # Expand f0: [N, 1, Lw] -> [N, Nh, Lw]
-        f0 = f0.expand(N, Nh, Lw)
+        f0 = t.expand(N, Nh, Lw)
 
         # Expand t: [N, 1, Lw] -> [N, Nh, Lw]
         t = t.expand(N, Nh, Lw)
@@ -177,16 +177,19 @@ class ConvFilter(nn.Module):
             kernel_size=40,
             ):
         super().__init__()
+        self.feature2scale = nn.ConvTranspose1d(input_channels, mid_channels, segment_size, segment_size)
         self.wave_in = CausalConv1d(1, mid_channels, kernel_size)
         self.wave_out = CausalConv1d(mid_channels, 1, kernel_size)
     
     # x: extracted features [N, 1, Lf], w: generated waves [N, 1, Lw]
     # Output: [N, 1, Lw]
-    def forward(self, x):
-        x = self.wave_in(x)
-        x = F.leaky_relu(x, LRELU_SLOPE)
-        x = self.wave_out(x)
-        return x
+    def forward(self, x, w):
+        res = w
+        s = self.feature2scale(x)
+        w = self.wave_in(w) * s
+        w = F.leaky_relu(w, LRELU_SLOPE)
+        w = self.wave_out(w)
+        return res
 
 
 class Generator(nn.Module):
@@ -211,9 +214,9 @@ class Generator(nn.Module):
         x = self.feature_extractor(x)
         h = self.harmonic_generator(x, t)
         n = self.noise_generator(x)
-        x = h * harmonics_scale + n * noise_scale
-        x = self.post_filter(x)
-        return x.squeeze(1)
+        w = h * harmonics_scale + n * noise_scale
+        w = self.post_filter(x, w)
+        return w.squeeze(1)
     
     # forward without argument 't'. for training.
     def forward_without_t(self, x, noise_scale=1, harmonics_scale=1):
