@@ -101,7 +101,6 @@ class HarmonicGenerator(nn.Module):
         pitch = self.to_pitch(x)
         mag = self.to_mag(x)
         f0 = self.base_frequency * 2 ** pitch
-        mag = torch.exp(mag.clamp_max(4.0))
         mag_cos, mag_sin = torch.chunk(mag, 2, dim=1)
         
         # frequency multiplyer
