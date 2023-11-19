@@ -7,3 +7,6 @@ a neuwal vocoder for next-generation voice conversion
 - low-latency
 - high-quality (sampling rate is 48kHz)
 - able to realtime inference on consumer CPU.
+
+## Architecture
+![architecture](https://github.com/uthree/zvc/blob/main/documents/images/architecture.png)
