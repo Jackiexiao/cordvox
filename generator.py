@@ -124,7 +124,7 @@ class HarmonicGenerator(nn.Module):
         formants = f0 * mul
 
         # Interpolate folmants
-        formants = F.interpolate(f0, Lw, mode='linear')
+        formants = F.interpolate(formants, Lw, mode='linear')
 
         # Interpolate mag
         mag = F.interpolate(mag, Lw, mode='linear')
