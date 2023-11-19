@@ -167,7 +167,6 @@ class NoiseGenerator(nn.Module):
             x = F.leaky_relu(x, LRELU_SLOPE)
             x = conv(x)
         x = self.post(x)
-        x = torch.tanh(x)
         return x
 
 
