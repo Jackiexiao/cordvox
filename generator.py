@@ -138,9 +138,9 @@ class NoiseGenerator(nn.Module):
     def __init__(
             self,
             input_channels=256,
-            upsample_rates=[10, 8, 2, 3],
+            upsample_rates=[10, 8, 3, 2],
             channels=[32, 16, 8, 4],
-            kernel_size=5
+            kernel_size=15,
             ):
         super().__init__()
         c0 = channels[0]
