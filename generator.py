@@ -84,7 +84,7 @@ class HarmonicGenerator(nn.Module):
             min_frequency=20,
             ):
         super().__init__()
-        self.to_mag = nn.Conv1d(input_channels, num_harmonics*2, 1)
+        self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
         self.to_pitch = nn.Conv1d(input_channels, 1, 1)
         self.sample_rate = sample_rate
         self.segment_size = segment_size
@@ -101,10 +101,9 @@ class HarmonicGenerator(nn.Module):
         
         # Estimate f0 and magnitudes of each harmonics 
         pitch = self.to_pitch(x)
-        mag = self.to_mag(x)
+        mag = torch.exp(self.to_mag(x).clamp_max(6.0))
         f0 = self.base_frequency * 2 ** pitch
         f0 = f0.clamp_min(self.min_frequency)
-        mag_cos, mag_sin = torch.chunk(mag, 2, dim=1)
         
         # frequency multiplyer
         mul = (torch.arange(Nh, device=x.device) + 1).unsqueeze(0).unsqueeze(2).expand(N, Nh, Lw)
@@ -113,22 +112,19 @@ class HarmonicGenerator(nn.Module):
         f0 = F.interpolate(f0, Lw, mode='linear')
 
         # Expand f0: [N, 1, Lw] -> [N, Nh, Lw]
-        f0 = t.expand(N, Nh, Lw)
+        f0 = f0.expand(N, Nh, Lw)
 
         # Expand t: [N, 1, Lw] -> [N, Nh, Lw]
         t = t.expand(N, Nh, Lw)
 
-        # Interpolate mag_sin, mag_cos
-        mag_sin = F.interpolate(mag_sin, Lw, mode='linear')
-        mag_cos = F.interpolate(mag_cos, Lw, mode='linear')
+        # Interpolate mag
+        mag = F.interpolate(mag, Lw, mode='linear')
 
-        # Expand mag_sin, mag_cos : [N, 1, Lw] -> [N, Nh, Lw]
-        mag_sin = mag_sin.expand(N, Nh, Lw)
-        mag_cos = mag_cos.expand(N, Nh, Lw)
-
-        sin_part = torch.sin(t * 2 * math.pi * f0 * mul) * mag_sin
-        cos_part = torch.cos(t * 2 * math.pi * f0 * mul) * mag_cos
-        harmonics = sin_part + cos_part
+        # Expand mags : [N, 1, Lw] -> [N, Nh, Lw]
+        mag = mag.expand(N, Nh, Lw)
+        
+        # Generate harmonics
+        harmonics = torch.sin(t * 2 * math.pi * f0 * mul) * mag
 
         # Sum all harmonics
         wave = harmonics.mean(dim=1, keepdim=True)
@@ -181,19 +177,16 @@ class ConvFilter(nn.Module):
             kernel_size=40,
             ):
         super().__init__()
-        self.feature2scale = nn.ConvTranspose1d(input_channels, mid_channels, segment_size, segment_size)
         self.wave_in = CausalConv1d(1, mid_channels, kernel_size)
         self.wave_out = CausalConv1d(mid_channels, 1, kernel_size)
     
     # x: extracted features [N, 1, Lf], w: generated waves [N, 1, Lw]
     # Output: [N, 1, Lw]
-    def forward(self, x, w):
-        res = w
-        s = self.feature2scale(x)
-        w = self.wave_in(w) * s
-        w = F.leaky_relu(w, LRELU_SLOPE)
-        w = self.wave_out(w)
-        return w
+    def forward(self, x):
+        x = self.wave_in(x)
+        x = F.leaky_relu(x, LRELU_SLOPE)
+        x = self.wave_out(x)
+        return x
 
 
 class Generator(nn.Module):
@@ -218,9 +211,9 @@ class Generator(nn.Module):
         x = self.feature_extractor(x)
         h = self.harmonic_generator(x, t)
         n = self.noise_generator(x)
-        w = h * harmonics_scale + n * noise_scale
-        w = self.post_filter(x, w)
-        return w.squeeze(1)
+        x = h * harmonics_scale + n * noise_scale
+        x = self.post_filter(x)
+        return x.squeeze(1)
     
     # forward without argument 't'. for training.
     def forward_without_t(self, x, noise_scale=1, harmonics_scale=1):
