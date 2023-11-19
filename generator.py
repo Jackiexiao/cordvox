@@ -94,8 +94,8 @@ class HarmonicGenerator(nn.Module):
             input_channels=256,
             sample_rate=48000,
             segment_size=960,
-            num_harmonics=8,
-            base_frequency=220,
+            num_harmonics=16,
+            base_frequency=128,
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
@@ -106,7 +106,7 @@ class HarmonicGenerator(nn.Module):
         self.num_harmonics = num_harmonics
     
     # x = extracted features, phi = phase status
-    def forward(self, x, phi):
+    def forward(self, x):
         N = x.shape[0] # batch size
         Nh = self.num_harmonics # number of harmonics
         Lf = x.shape[2] # frame length
@@ -133,7 +133,7 @@ class HarmonicGenerator(nn.Module):
         mag = mag.expand(N, Nh, Lw)
         
         # Generate harmonics (algorith based on DDSP)
-        t = torch.cumsum(formants / self.sample_rate, dim=2) + phi
+        t = torch.cumsum(formants / self.sample_rate, dim=2)
         harmonics = torch.sin(2 * math.pi * t) * mag
 
         # Sum all harmonics
@@ -181,24 +181,25 @@ class ConvFilter(nn.Module):
     def __init__(
             self,
             input_channels=256,
-            mid_channels=8,
+            mid_channels=16,
             segment_size=960,
-            kernel_size=40,
+            kernel_size=5,
+            num_layers=6,
             ):
         super().__init__()
-        self.feature2scale = nn.ConvTranspose1d(input_channels, mid_channels, segment_size, segment_size)
         self.wave_in = CausalConv1d(1, mid_channels, kernel_size)
+        self.mid_layers = DilatedCausalConvSatck(mid_channels, mid_channels, kernel_size, num_layers)
         self.wave_out = CausalConv1d(mid_channels, 1, kernel_size)
     
     # x: extracted features [N, 1, Lf], w: generated waves [N, 1, Lw]
     # Output: [N, 1, Lw]
-    def forward(self, x, w, alpha=0):
-        res = w
-        s = self.feature2scale(x)
-        w = self.wave_in(w) * s
-        w = F.leaky_relu(w, LRELU_SLOPE)
-        w = self.wave_out(w)
-        return w * (1 - alpha) + res * alpha
+    def forward(self, x, alpha=0.5):
+        res = x
+        x = self.wave_in(x)
+        x = self.mid_layers(x)
+        x = F.leaky_relu(x, LRELU_SLOPE)
+        x = self.wave_out(x)
+        return x * (1 - alpha) + res * alpha
 
 
 class Generator(nn.Module):
@@ -217,23 +218,15 @@ class Generator(nn.Module):
         self.noise_generator = NoiseGenerator()
         self.post_filter = ConvFilter()
     
-    # x: input features, phi: [N, Nh, 1]
+    # x: input features
     # Output: [N, Lw]
-    def forward(self, x, phi, noise_scale=1, harmonics_scale=1):
+    def forward(self, x, noise_scale=1, harmonics_scale=1):
         x = self.feature_extractor(x)
-        h = self.harmonic_generator(x, phi)
+        h = self.harmonic_generator(x)
         n = self.noise_generator(x)
-        w = h * harmonics_scale + n * noise_scale
-        w = self.post_filter(x, w)
-        w = w.squeeze(1)
-        return w, phi
+        x = h * harmonics_scale + n * noise_scale
+        x = self.post_filter(x)
+        x = x.squeeze(1)
+        return x
     
-    # forward without argument 'phi'. for training.
-    def forward_without_phi(self, x, noise_scale=1, harmonics_scale=1):
-        N = x.shape[0]
-        Nh = self.harmonic_generator.num_harmonics
-        phi = torch.zeros(N, Nh, 1, device=x.device)
-        wf, phi = self.forward(x, phi, noise_scale, harmonics_scale)
-        wf = torch.clamp(wf, -1, 1)
-        return wf
 
