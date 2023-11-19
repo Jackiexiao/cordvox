@@ -212,16 +212,16 @@ class Generator(nn.Module):
     
     # x: input features, t: time(seconds) [N, 1, Lw]
     # Output: [N, Lw]
-    def forward(self, x, t):
+    def forward(self, x, t, noise_scale=1, harmonics_scale=1):
         x = self.feature_extractor(x)
         h = self.harmonic_generator(x, t)
         n = self.noise_generator(x)
-        w = h + n
+        w = h * harmonics_scale + n * noise_scale
         w = self.post_filter(x, w)
         return w.squeeze(1)
     
     # forward without argument 't'. for training.
-    def forward_without_t(self, x):
+    def forward_without_t(self, x, noise_scale=1, harmonics_scale=1):
         N = x.shape[0] # batch size
         Lf = x.shape[2] # length(frame based)
         Lw = Lf * self.segment_size
@@ -229,5 +229,5 @@ class Generator(nn.Module):
         t = torch.linspace(0, Lw, Lw) / self.sample_rate
         t = t.expand(N, 1, Lw)
         t = t.to(x.device)
-        return self.forward(x, t)
+        return self.forward(x, t, noise_scale, harmonics_scale)
 

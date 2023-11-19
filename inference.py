@@ -17,6 +17,8 @@ parser.add_argument('-genp', '--generator-path', default="generator.pt")
 parser.add_argument('-d', '--device', default='cpu')
 parser.add_argument('-c', '--chunk', default=65536, type=int)
 parser.add_argument('-norm', '--normalize', default=False, type=bool)
+parser.add_argument('--noise', default=1, type=float)
+parser.add_argument('--harmonics', default=1, type=float)
 parser.add_argument('-g', '--gain', default=0)
 
 args = parser.parse_args()
@@ -65,7 +67,7 @@ for i, path in enumerate(paths):
                 chunk = torch.cat([chunk, torch.zeros(1, args.chunk - chunk.shape[1])], dim=1)
             chunk = chunk.to(device)
 
-            chunk = G.forward_without_t(log_mel(chunk))
+            chunk = G.forward_without_t(log_mel(chunk), args.noise, args.harmonics)
             
             chunk = chunk[:, args.chunk:-args.chunk]
 
