@@ -234,5 +234,6 @@ class Generator(nn.Module):
         Nh = self.harmonic_generator.num_harmonics
         phi = torch.zeros(N, Nh, 1, device=x.device)
         wf, phi = self.forward(x, phi, noise_scale, harmonics_scale)
+        wf = torch.clamp(wf, -1, 1)
         return wf
 
