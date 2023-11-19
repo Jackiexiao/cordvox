@@ -96,7 +96,6 @@ class HarmonicGenerator(nn.Module):
             segment_size=960,
             num_harmonics=8,
             base_frequency=220,
-            min_frequency=20,
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
@@ -105,7 +104,6 @@ class HarmonicGenerator(nn.Module):
         self.segment_size = segment_size
         self.base_frequency = base_frequency
         self.num_harmonics = num_harmonics
-        self.min_frequency = min_frequency
     
     # x = extracted features, phi = phase status
     def forward(self, x, phi):
