@@ -29,7 +29,6 @@ parser.add_argument('-m', '--max-data', default=-1, type=int)
 parser.add_argument('-fp16', default=False, type=bool)
 parser.add_argument('--feature-matching', default=2, type=float)
 parser.add_argument('--mel', default=45, type=float)
-parser.add_argument('--content', default=1, type=float)
 
 args = parser.parse_args()
 
@@ -121,7 +120,7 @@ for epoch in range(args.epoch):
             loss_mel = (log_mel(wave_fake) - spec).abs().mean()
             loss_feat = D.feat_loss(cut_center_wav(wave_fake), cut_center_wav(wave))
 
-            loss_g = loss_mel * args.mel + loss_feat * args.feature_matching  + loss_adv
+            loss_g = loss_mel * args.mel + loss_feat * args.feature_matching + loss_adv
 
         scaler.scale(loss_g).backward()
         scaler.step(OptG)

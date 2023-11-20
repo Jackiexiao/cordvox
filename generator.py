@@ -101,7 +101,9 @@ class HarmonicGenerator(nn.Module):
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
-        self.to_octave = nn.Conv1d(input_channels, 1, 1)
+        self.to_octave = nn.Sequential(
+                ChannelNorm(input_channels),
+                nn.Conv1d(input_channels, 1, 1))
         self.sample_rate = sample_rate
         self.segment_size = segment_size
         self.base_frequency = base_frequency
@@ -241,8 +243,16 @@ class Generator(nn.Module):
         x = x.squeeze(1)
         return x, formants
 
-
     def forward(self, x, noise_scale=1, harmonics_scale=1):
         x, fs = self.wave_formants(x, noise_scale, harmonics_scale)
         return x
+
+    def extract_feature(self, x):
+        return self.feature_extractor(x)
+
+    def feat_loss(self, fake, real):
+        with torch.no_grad():
+            real_feat = self.extract_feature(real)
+        fake_feat = self.extract_feature(fake)
+        return (real_feat - fake_feat).abs().mean()
 
