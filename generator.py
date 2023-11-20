@@ -91,8 +91,8 @@ class F0Estimator(nn.Module):
     def __init__(self, channels=256, f0_min=20, f0_max=3520):
         super().__init__()
         self.conv = nn.Conv1d(channels, 2, 1)
-        self.s1 = nn.Parameter(torch.ones(1, 1, 1) * 8)
-        self.s2 = nn.Parameter(torch.ones(1, 1, 1) * 440)
+        self.scale_shift = nn.Conv1d(1, 1, 1)
+        self.post_scale = nn.Parameter(torch.ones(1, 1, 1) * 440)
         self.f0_max = f0_max
         self.f0_min = f0_min
 
@@ -100,9 +100,9 @@ class F0Estimator(nn.Module):
         x = self.conv(x)
         a, b = x.chunk(2, dim=1)
         x = (torch.atan(a / (b + 1e-4)) / (math.pi * 2))
-        x = x * self.s1
+        x = self.scale_shift(x)
         x = 2 ** x # Convert log to linear scale
-        x = x * self.s2
+        x = x * self.post_scale
         x = x.clamp(self.f0_min, self.f0_max)
         return x
 
