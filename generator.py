@@ -94,10 +94,10 @@ class HarmonicGenerator(nn.Module):
             input_channels=256,
             sample_rate=48000,
             segment_size=960,
-            num_harmonics=32,
+            num_harmonics=8,
             base_frequency=440.0,
             f0_min = 20.0,
-            f0_max = 24000.0,
+            f0_max = 16000.0,
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
@@ -110,7 +110,7 @@ class HarmonicGenerator(nn.Module):
         self.f0_max = f0_max
     
     # x = extracted features, phi = phase status
-    def forward(self, x):
+    def wave_formants(self, x):
         N = x.shape[0] # batch size
         Nh = self.num_harmonics # number of harmonics
         Lf = x.shape[2] # frame length
@@ -143,7 +143,11 @@ class HarmonicGenerator(nn.Module):
 
         # Sum all harmonics
         wave = harmonics.mean(dim=1, keepdim=True)
-        return wave
+        return wave, formants
+
+    def forward(self, x):
+        x, _ = self.wave_formants(x)
+        return x
 
 
 # Tiny upsample-based noise generator
@@ -199,7 +203,7 @@ class ConvFilter(nn.Module):
     
     # x: extracted features [N, 1, Lf], w: generated waves [N, 1, Lw]
     # Output: [N, 1, Lw]
-    def forward(self, x, alpha=0.5):
+    def forward(self, x, alpha=1):
         res = x
         x = self.wave_in(x)
         x = self.mid_layers(x)
@@ -226,15 +230,19 @@ class Generator(nn.Module):
     
     # x: input features
     # Output: [N, Lw]
-    def forward(self, x, noise_scale=1, harmonics_scale=1):
+    def wave_formants(self, x, noise_scale=1, harmonics_scale=1):
         x = self.feature_extractor(x)
-        h = self.harmonic_generator(x)
+        h, formants = self.harmonic_generator.wave_formants(x)
         n = self.noise_generator(x)
         x = h * harmonics_scale + n * noise_scale
         x = self.post_filter(x)
         mu = x.mean(dim=2, keepdim=True)
         x = x - mu
         x = x.squeeze(1)
+        return x, formants
+
+
+    def forward(self, x, noise_scale=1, harmonics_scale=1):
+        x, fs = self.wave_formants(x, noise_scale, harmonics_scale)
         return x
-    
 
