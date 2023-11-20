@@ -180,6 +180,7 @@ class NoiseGenerator(nn.Module):
         c0 = channels[0]
         c_last = channels[-1]
         self.input_layer = CausalConv1d(input_channels, c0, kernel_size)
+        self.to_gains = nn.ModuleList([])
         self.ups = nn.ModuleList([])
         self.convs = nn.ModuleList([])
         for i in range(len(upsample_rates)):
@@ -191,14 +192,17 @@ class NoiseGenerator(nn.Module):
                 c_next = channels[-1]
             self.ups.append(nn.ConvTranspose1d(c, c_next, r, r))
             self.convs.append(DilatedCausalConvSatck(c_next, c_next, kernel_size, num_layers))
+            self.to_gains.append(nn.Conv1d(c_next, 1, 1))
         self.post = CausalConv1d(c_last, 1, kernel_size)
 
     def forward(self, x):
         x = self.input_layer(x)
-        for up, conv in zip(self.ups, self.convs):
+        for up, conv, to_gain in zip(self.ups, self.convs, self.to_gains):
             x = F.leaky_relu(x, LRELU_SLOPE)
             x = up(x)
-            x = conv(x)
+            skip = x
+            x = x + torch.randn_like(x) * to_gain(x)
+            x = conv(x) + x
         x = self.post(x)
         return x
 
