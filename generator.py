@@ -78,7 +78,7 @@ class DilatedCausalConvSatck(nn.Module):
         self.convs = nn.ModuleList([])
         self.convs.append(CausalConv1d(input_channels, output_channels, kernel_size, 1))
         for d in range(num_layers-1):
-            self.convs.append(CausalConv1d(output_channels, output_channels, kernel_size, d+2))
+            self.convs.append(CausalConv1d(output_channels, output_channels, kernel_size, 2**(d+1)))
     
     def forward(self, x):
         for c in self.convs:
@@ -94,10 +94,10 @@ class HarmonicGenerator(nn.Module):
             input_channels=256,
             sample_rate=48000,
             segment_size=960,
-            num_harmonics=16,
-            base_frequency=440,
-            f0_min = 20,
-            f0_max = 24000,
+            num_harmonics=32,
+            base_frequency=440.0,
+            f0_min = 20.0,
+            f0_max = 24000.0,
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
@@ -152,8 +152,9 @@ class NoiseGenerator(nn.Module):
             self,
             input_channels=256,
             upsample_rates=[10, 8, 4, 3],
-            channels=[64, 32, 16, 8],
+            channels=[32, 16, 8, 4],
             kernel_size=5,
+            num_layers=3
             ):
         super().__init__()
         c0 = channels[0]
@@ -169,7 +170,7 @@ class NoiseGenerator(nn.Module):
             else:
                 c_next = channels[-1]
             self.ups.append(nn.ConvTranspose1d(c, c_next, r, r))
-            self.convs.append(DilatedCausalConvSatck(c_next, c_next, kernel_size, 3))
+            self.convs.append(DilatedCausalConvSatck(c_next, c_next, kernel_size, num_layers))
         self.post = CausalConv1d(c_last, 1, kernel_size)
 
     def forward(self, x):
@@ -231,6 +232,8 @@ class Generator(nn.Module):
         n = self.noise_generator(x)
         x = h * harmonics_scale + n * noise_scale
         x = self.post_filter(x)
+        mu = x.mean(dim=2, keepdim=True)
+        x = x - mu
         x = x.squeeze(1)
         return x
     
