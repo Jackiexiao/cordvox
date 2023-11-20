@@ -62,3 +62,28 @@ class CausalConvNeXtStack(nn.Module):
         x = self.mid_layers(x)
         x = self.output_layer(x)
         return x
+
+
+class CausalConv1d(nn.Module):
+    def __init__(self, input_channels, output_channels, kernel_size=5, dilation=1):
+        super().__init__()
+        self.pad = nn.ReflectionPad1d([kernel_size*dilation-dilation, 0])
+        self.conv = nn.Conv1d(input_channels, output_channels, kernel_size, dilation=dilation)
+
+    def forward(self, x):
+        return self.conv(self.pad(x))
+
+
+class DCC(nn.Module):
+    def __init__(self, input_channels, output_channels, kernel_size=5, num_layers=3):
+        super().__init__()
+        self.convs = nn.ModuleList([])
+        self.convs.append(CausalConv1d(input_channels, output_channels, kernel_size, 1))
+        for d in range(num_layers-1):
+            self.convs.append(CausalConv1d(output_channels, output_channels, kernel_size, 2**(d+1)))
+
+    def forward(self, x):
+        for c in self.convs:
+            F.leaky_relu(x, LRELU_SLOPE)
+            x = c(x)
+        return x

@@ -11,12 +11,14 @@ import matplotlib.pyplot as plt
 import time
 import numpy as np
 
-from generator import Generator
+from module.generator import Generator
+from module.f0_estimator import F0Estimator
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--inputs', default="./inputs/")
 parser.add_argument('-o', '--outputs', default="./outputs/")
 parser.add_argument('-genp', '--generator-path', default="generator.pt")
+parser.add_argument('-f0ep', '--f0-estimator-path', default="f0_estimator.pt")
 parser.add_argument('-d', '--device', default='cpu')
 parser.add_argument('-c', '--chunk', default=48000, type=int)
 parser.add_argument('-norm', '--normalize', default=False, type=bool)
@@ -30,6 +32,9 @@ device = torch.device(args.device)
 
 G = Generator().to(device)
 G.load_state_dict(torch.load(args.generator_path, map_location=device))
+
+F0E = F0Estimator().to(device)
+F0E.load_state_dict(torch.load(args.f0_estimator_path, map_location=device))
 
 if not os.path.exists(args.outputs):
     os.mkdir(args.outputs)
@@ -112,8 +117,9 @@ for i, path in enumerate(paths):
             chunk = chunk.to(device)
 
             chunk_in = chunk[:, args.chunk:-args.chunk]
-
-            chunk, f_chunk = G.wave_formants(log_mel(chunk), args.noise, args.harmonics)
+            
+            f0 = F0E.estimate(chunk)
+            chunk, f_chunk = G.wave_formants(log_mel(chunk), f0)
             
             chunk = chunk[:, args.chunk:-args.chunk]
             f_chunk = f_chunk[:, :, args.chunk:-args.chunk]

@@ -37,4 +37,4 @@ class F0Estimator(nn.Module):
         return torch.stft(x, self.n_fft, self.hop_length, return_complex=True).abs()[:, :, 1:]
 
     def estimate(self, x):
-        return torch.argmax(self.forward(x), dim=1, keepdim=False).to(torch.float)
+        return torch.argmax(self.forward(x), dim=1, keepdim=True).to(torch.float)
