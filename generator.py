@@ -87,26 +87,42 @@ class DilatedCausalConvSatck(nn.Module):
         return x
 
 
-# Sinewave based harmonic generator
-class HarmonicGenerator(nn.Module):
+class F0Estimator(nn.Module):
+    def __init__(self, channels=256, f0_min=20, f0_max=2000):
+        super().__init__()
+        self.conv = nn.Conv1d(channels, 2, 1)
+        self.s1 = nn.Parameter(torch.ones(1, 1, 1) * 4)
+        self.s2 = nn.Parameter(torch.ones(1, 1, 1) * 440)
+        self.f0_max = f0_max
+        self.f0_min = f0_min
+
+    def forward(self, x):
+        x = self.conv(x)
+        a, b = x.chunk(2, dim=1)
+        x = (torch.atan(a / (b + 1e-4)) / (math.pi * 2))
+        x = x * self.s1
+        x = 2 ** x # Convert log to linear scale
+        x = x * self.s2
+        x = x.clamp(self.f0_min, self.f0_max)
+        return x
+
+
+# Sinewave based harmonic Oscillator
+class HarmonicOscillator(nn.Module):
     def __init__(
             self,
             input_channels=256,
             sample_rate=48000,
             segment_size=960,
-            num_harmonics=8,
-            base_frequency=440.0,
-            f0_min = 0.0,
-            f0_max = 16000.0,
+            num_harmonics=32,
+            f0_min = 20.0,
+            f0_max = 2000.0,
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
-        self.to_octave = nn.Sequential(
-                ChannelNorm(input_channels),
-                nn.Conv1d(input_channels, 1, 1))
+        self.f0_estimator = F0Estimator(input_channels, f0_min, f0_max)
         self.sample_rate = sample_rate
         self.segment_size = segment_size
-        self.base_frequency = base_frequency
         self.num_harmonics = num_harmonics
         self.f0_min = f0_min
         self.f0_max = f0_max
@@ -119,10 +135,8 @@ class HarmonicGenerator(nn.Module):
         Lw = Lf * self.segment_size # wave length
         
         # Estimate f0 and magnitudes of each harmonics 
-        octave = self.to_octave(x)
-        mag = torch.exp(self.to_mag(x).clamp_max(6.0))
-        f0 = self.base_frequency * 2 ** octave # to Hz
-        f0 = torch.clamp(f0, self.f0_min, self.f0_max)
+        f0 = self.f0_estimator(x)
+        mag = torch.exp(self.to_mag(x).clamp_max(4.0))
 
         # frequency multiplyer
         mul = (torch.arange(Nh, device=x.device) + 1).unsqueeze(0).unsqueeze(2).expand(N, Nh, Lf)
@@ -226,7 +240,7 @@ class Generator(nn.Module):
         self.sample_rate = sample_rate
 
         self.feature_extractor = CausalConvNeXtStack(input_channels)
-        self.harmonic_generator = HarmonicGenerator(segment_size=segment_size)
+        self.harmonic_oscillator = HarmonicOscillator(segment_size=segment_size)
         self.noise_generator = NoiseGenerator()
         self.post_filter = ConvFilter()
     
@@ -234,7 +248,7 @@ class Generator(nn.Module):
     # Output: [N, Lw]
     def wave_formants(self, x, noise_scale=1, harmonics_scale=1):
         x = self.feature_extractor(x)
-        h, formants = self.harmonic_generator.wave_formants(x)
+        h, formants = self.harmonic_oscillator.wave_formants(x)
         n = self.noise_generator(x)
         x = h * harmonics_scale + n * noise_scale
         x = self.post_filter(x)
