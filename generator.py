@@ -96,7 +96,7 @@ class HarmonicGenerator(nn.Module):
             segment_size=960,
             num_harmonics=8,
             base_frequency=440.0,
-            f0_min = 20.0,
+            f0_min = 0.0,
             f0_max = 16000.0,
             ):
         super().__init__()
