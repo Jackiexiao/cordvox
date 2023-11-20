@@ -13,6 +13,7 @@ import numpy as np
 
 from module.generator import Generator
 from module.f0_estimator import F0Estimator
+from module.preprocess import LogMelSpectrogram
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--inputs', default="./inputs/")
@@ -39,12 +40,8 @@ F0E.load_state_dict(torch.load(args.f0_estimator_path, map_location=device))
 if not os.path.exists(args.outputs):
     os.mkdir(args.outputs)
 
-mel = torchaudio.transforms.MelSpectrogram(
-        sample_rate=48000,
-        n_fft=3840,
-        hop_length=960,
-        n_mels=80
-        ).to(device)
+
+log_mel = LogMelSpectrogram().to(device)
 
 mel_hq = torchaudio.transforms.MelSpectrogram(
         sample_rate=48000,
@@ -52,10 +49,6 @@ mel_hq = torchaudio.transforms.MelSpectrogram(
         hop_length=240,
         n_mels=256
         ).to(device)
-
-
-def log_mel(x, eps=1e-5):
-    return torch.log(mel(x) + eps)[:, :, 1:]
 
 def log_mel_hq(x, eps=1e-5):
     return torch.log(mel_hq(x) + eps)[:, :, 1:]
@@ -118,8 +111,7 @@ for i, path in enumerate(paths):
 
             chunk_in = chunk[:, args.chunk:-args.chunk]
             
-            f0 = F0E.estimate(chunk)
-            chunk, f_chunk = G.wave_formants(log_mel(chunk), f0)
+            chunk, f_chunk = G.wave_formants(log_mel(chunk))
             
             chunk = chunk[:, args.chunk:-args.chunk]
             f_chunk = f_chunk[:, :, args.chunk:-args.chunk]

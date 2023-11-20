@@ -34,6 +34,7 @@ class HarmonicOscillator(nn.Module):
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
+        self.to_f0 = nn.Conv1d(input_channels, 1, 1)
         self.sample_rate = sample_rate
         self.segment_size = segment_size
         self.num_harmonics = num_harmonics
@@ -41,13 +42,16 @@ class HarmonicOscillator(nn.Module):
         self.f0_max = f0_max
     
     # x = extracted features, phi = phase status
-    def wave_formants(self, x, f0):
+    def wave_formants(self, x):
         N = x.shape[0] # batch size
         Nh = self.num_harmonics # number of harmonics
         Lf = x.shape[2] # frame length
         Lw = Lf * self.segment_size # wave length
         
+        # Calculate Magnitude and F0
         mag = torch.exp(self.to_mag(x).clamp_max(4.0))
+        f0 = 440 * 2 ** self.to_f0(x) + self.f0_min
+        f0 = torch.clamp_max(f0, self.f0_max)
 
         # frequency multiplyer
         mul = (torch.arange(Nh, device=x.device) + 1).unsqueeze(0).unsqueeze(2).expand(N, Nh, Lf)
@@ -132,13 +136,13 @@ class Generator(nn.Module):
         self.noise_generator = NoiseGenerator()
         self.reverb = Reverb()
 
-    def forward(self, x, f0):
-        x, _ = self.wave_formants(x, f0)
+    def forward(self, x):
+        x, _ = self.wave_formants(x)
         return x
 
-    def wave_formants(self, x, f0):
+    def wave_formants(self, x):
         x = self.feature_extractor(x)
-        h, formants = self.harmonic_oscillator.wave_formants(x, f0)
+        h, formants = self.harmonic_oscillator.wave_formants(x)
         n = self.noise_generator(x)
         x = h #+ n
         x = self.reverb(x)

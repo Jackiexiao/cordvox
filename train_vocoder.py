@@ -14,6 +14,7 @@ from module.dataset import WaveFileDirectory
 from module.generator import Generator
 from module.discriminator import Discriminator
 from module.f0_estimator import F0Estimator
+from module.preprocess import LogMelSpectrogram
 
 parser = argparse.ArgumentParser(description="train Vocoder")
 
@@ -96,35 +97,26 @@ SchedulerD = torch.optim.lr_scheduler.CosineAnnealingLR(OptD, 5000)
 
 step_count = 0
 
-mel = torchaudio.transforms.MelSpectrogram(
-        sample_rate=48000,
-        n_fft=3840,
-        hop_length=960,
-        n_mels=80
-        ).to(device)
-
-def log_mel(x, eps=1e-5):
-    return torch.log(mel(x) + eps)[:, :, 1:]
+log_mel = LogMelSpectrogram().to(device)
 
 for epoch in range(args.epoch):
     tqdm.write(f"Epoch #{epoch}")
     bar = tqdm(total=len(ds))
     for batch, wave in enumerate(dl):
         wave = wave.to(device) * (torch.rand(wave.shape[0], 1, device=device) * 2)
-        spec = log_mel(wave)
+        z = log_mel(wave)
         
         # Train G.
         OptG.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
-            f0 = F0E.estimate(wave)
-            wave_fake = G(spec, f0)
+            wave_fake = G(z)
             
             loss_adv = 0
             logits = D.logits(cut_center_wav(wave_fake))
             for logit in logits:
                 loss_adv += (logit ** 2).mean()
 
-            loss_mel = (log_mel(wave_fake) - spec).abs().mean()
+            loss_mel = (log_mel(wave_fake) - log_mel(wave)).abs().mean()
             loss_feat = D.feat_loss(cut_center_wav(wave_fake), cut_center_wav(wave))
 
             loss_g = loss_mel * args.mel + loss_feat * args.feature_matching + loss_adv
