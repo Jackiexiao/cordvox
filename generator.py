@@ -88,7 +88,7 @@ class DilatedCausalConvSatck(nn.Module):
 
 
 class F0Estimator(nn.Module):
-    def __init__(self, channels=256, f0_min=20, f0_max=2000):
+    def __init__(self, channels=256, f0_min=20, f0_max=3520):
         super().__init__()
         self.conv = nn.Conv1d(channels, 2, 1)
         self.s1 = nn.Parameter(torch.ones(1, 1, 1) * 16)
@@ -116,7 +116,7 @@ class HarmonicOscillator(nn.Module):
             segment_size=960,
             num_harmonics=32,
             f0_min = 20.0,
-            f0_max = 2000.0,
+            f0_max = 3520.0,
             ):
         super().__init__()
         self.to_mag = nn.Conv1d(input_channels, num_harmonics, 1)
@@ -201,8 +201,8 @@ class NoiseGenerator(nn.Module):
             x = F.leaky_relu(x, LRELU_SLOPE)
             x = up(x)
             skip = x
-            x = x + torch.randn_like(x) * to_gain(x)
-            x = conv(x) + x
+            x = torch.randn_like(x) * to_gain(x)
+            x = conv(x) + skip
         x = self.post(x)
         return x
 
