@@ -91,7 +91,7 @@ class F0Estimator(nn.Module):
     def __init__(self, channels=256, f0_min=20, f0_max=2000):
         super().__init__()
         self.conv = nn.Conv1d(channels, 2, 1)
-        self.s1 = nn.Parameter(torch.ones(1, 1, 1) * 4)
+        self.s1 = nn.Parameter(torch.ones(1, 1, 1) * 16)
         self.s2 = nn.Parameter(torch.ones(1, 1, 1) * 440)
         self.f0_max = f0_max
         self.f0_min = f0_min
