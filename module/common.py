@@ -74,7 +74,7 @@ class CausalConv1d(nn.Module):
         return self.conv(self.pad(x))
 
 
-class DCC(nn.Module):
+class DilatedCausalConvolution(nn.Module):
     def __init__(self, input_channels, output_channels, kernel_size=5, num_layers=3):
         super().__init__()
         self.convs = nn.ModuleList([])
