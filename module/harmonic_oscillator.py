@@ -18,7 +18,7 @@ class DifferentiableOscillationControler(nn.Module):
                  sample_rate=48000):
         super().__init__()
         self.num_harmonics = num_harmonics
-        self.convnet = CausalConvNeXtStack(input_channels, channels, hidden_channels, kernel_size, output_channels=num_harmonics+1, num_layers)
+        self.convnet = CausalConvNeXtStack(input_channels, channels, hidden_channels, kernel_size, num_harmonics+1, num_layers)
 
     def forward(self, x):
         x = self.convnet(x)
@@ -36,6 +36,7 @@ class HarmonicOscillator(nn.Module):
         super().__init__()
         self.num_harmonics = num_harmonics
         self.segment_size = segment_size
+        self.sample_rate = sample_rate
     
     # f0: [N, 1, Lf], amps: [N, Nh, L]f, t0: float
     def forward(self, f0, amps, t0=0):
@@ -44,9 +45,8 @@ class HarmonicOscillator(nn.Module):
         Lf = amps.shape[2] # frame length
         Lw = Lf * self.segment_size # wave length
     
-
         # frequency multiplyer
-        mul = (torch.arange(Nh, device=x.device) + 1).unsqueeze(0).unsqueeze(2).expand(N, Nh, Lf)
+        mul = (torch.arange(Nh, device=f0.device) + 1).unsqueeze(0).unsqueeze(2).expand(N, Nh, Lf)
 
         # Calculate formants
         formants = f0 * mul
@@ -55,11 +55,11 @@ class HarmonicOscillator(nn.Module):
         formants = F.interpolate(formants, Lw, mode='linear')
 
         # Interpolate amp
-        amp = F.interpolate(mag, Lw, mode='linear')
+        amps = F.interpolate(amps, Lw, mode='linear')
 
         # Generate harmonics
         dt = torch.cumsum(formants / self.sample_rate, dim=2)
-        harmonics = torch.sin(2 * math.pi * dt + t0) * amp
+        harmonics = torch.sin(2 * math.pi * dt + t0) * amps
 
         # Sum all harmonics
         wave = harmonics.mean(dim=1, keepdim=True)
@@ -67,8 +67,3 @@ class HarmonicOscillator(nn.Module):
         return wave
 
 
-class Evaluator(nn.Module):
-    def __init__(
-            self
-            ):
-        super().__init__()
