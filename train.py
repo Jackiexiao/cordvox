@@ -13,7 +13,6 @@ from tqdm import tqdm
 from module.dataset import WaveFileDirectory
 from module.generator import Generator
 from module.discriminator import Discriminator
-from module.f0_estimator import F0Estimator
 from module.preprocess import LogMelSpectrogram
 
 parser = argparse.ArgumentParser(description="train Vocoder")
@@ -22,7 +21,6 @@ parser.add_argument('dataset')
 
 parser.add_argument('-genp', '--generator-path', default="generator.pt")
 parser.add_argument('-disp', '--discriminator-path', default="discriminator.pt")
-parser.add_argument('-f0ep', '--f0-estimator-path', default="f0_estimator.pt")
 parser.add_argument('-d', '--device', default='cuda')
 parser.add_argument('-e', '--epoch', default=1000, type=int)
 parser.add_argument('-b', '--batch-size', default=16, type=int)
@@ -30,8 +28,9 @@ parser.add_argument('-lr', '--learning-rate', default=1e-4, type=float)
 parser.add_argument('-len', '--length', default=24000, type=int)
 parser.add_argument('-m', '--max-data', default=-1, type=int)
 parser.add_argument('-fp16', default=False, type=bool)
-parser.add_argument('--feature-matching', default=2, type=float)
+parser.add_argument('--feat', default=2, type=float)
 parser.add_argument('--mel', default=45, type=float)
+parser.add_argument('--adv', default=1, type=float)
 
 args = parser.parse_args()
 
@@ -44,15 +43,11 @@ def inference_mode(model):
 def load_or_init_models(device=torch.device('cpu')):
     dis = Discriminator().to(device)
     gen = Generator().to(device)
-    f0e = F0Estimator().to(device)
     if os.path.exists(args.generator_path):
         gen.load_state_dict(torch.load(args.generator_path, map_location=device))
     if os.path.exists(args.discriminator_path):
         dis.load_state_dict(torch.load(args.discriminator_path, map_location=device))
-    if os.path.exists(args.f0_estimator_path):
-        f0e.load_state_dict(torch.load(args.f0_estimator_path, map_location=device))
-    inference_mode(f0e)
-    return gen, dis, f0e
+    return gen, dis
 
 
 def save_models(gen, dis):
@@ -77,7 +72,7 @@ def cut_center_wav(x):
 
 
 device = torch.device(args.device)
-G, D, F0E = load_or_init_models(device)
+G, D = load_or_init_models(device)
 
 ds = WaveFileDirectory(
         [args.dataset],
@@ -119,7 +114,7 @@ for epoch in range(args.epoch):
             loss_mel = (log_mel(wave_fake) - log_mel(wave)).abs().mean()
             loss_feat = D.feat_loss(cut_center_wav(wave_fake), cut_center_wav(wave))
 
-            loss_g = loss_mel * args.mel + loss_feat * args.feature_matching + loss_adv
+            loss_g = loss_mel * args.mel + loss_feat * args.feat + loss_adv * args.adv
 
         scaler.scale(loss_g).backward()
         scaler.step(OptG)

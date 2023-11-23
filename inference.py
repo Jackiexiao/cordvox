@@ -12,14 +12,12 @@ import time
 import numpy as np
 
 from module.generator import Generator
-from module.f0_estimator import F0Estimator
 from module.preprocess import LogMelSpectrogram
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--inputs', default="./inputs/")
 parser.add_argument('-o', '--outputs', default="./outputs/")
 parser.add_argument('-genp', '--generator-path', default="generator.pt")
-parser.add_argument('-f0ep', '--f0-estimator-path', default="f0_estimator.pt")
 parser.add_argument('-d', '--device', default='cpu')
 parser.add_argument('-c', '--chunk', default=48000, type=int)
 parser.add_argument('-norm', '--normalize', default=False, type=bool)
@@ -33,9 +31,6 @@ device = torch.device(args.device)
 
 G = Generator().to(device)
 G.load_state_dict(torch.load(args.generator_path, map_location=device))
-
-F0E = F0Estimator().to(device)
-F0E.load_state_dict(torch.load(args.f0_estimator_path, map_location=device))
 
 if not os.path.exists(args.outputs):
     os.mkdir(args.outputs)
@@ -98,7 +93,6 @@ for i, path in enumerate(paths):
     chunks = chunks.transpose(1, 2).split(1, dim=1)
 
     result = []
-    f_chunks = []
     with torch.no_grad():
         tqdm.write(f"{i} / {n_files} : Inferencing {path}")
         bar = tqdm(total=len(chunks))
@@ -111,21 +105,18 @@ for i, path in enumerate(paths):
 
             chunk_in = chunk[:, args.chunk:-args.chunk]
             
-            chunk, f_chunk = G.wave_formants(log_mel(chunk))
+            chunk = G(log_mel(chunk))
             
             chunk = chunk[:, args.chunk:-args.chunk]
-            f_chunk = f_chunk[:, :, args.chunk:-args.chunk]
 
             score = (log_mel(chunk_in) - log_mel(chunk)).abs().mean().item()
             scores.append(score)
 
             result.append(chunk.to('cpu'))
-            f_chunks.append(f_chunk)
             bar.set_description(f"Mel loss: {score}")
             bar.update(1)
 
         wf = torch.cat(result, dim=1)[:, :total_length]
-        formants = torch.cat(f_chunks, dim=1)[:, :total_length]
 
         wf_out = wf
 
@@ -137,8 +128,7 @@ for i, path in enumerate(paths):
     file_name = f"{i}_{os.path.splitext(os.path.basename(path))[0]}"
     plot_spec(log_mel_hq(wf_in), os.path.join(args.outputs, f"{file_name}_input.png"))
     plot_spec(log_mel_hq(wf_out), os.path.join(args.outputs, f"{file_name}_output.png"))
-    plot_spec((log_mel_hq(wf_in) - log_mel_hq(wf_out)).abs(), os.path.join("./outputs/", f"{file_name}_diff.png"))
-    #plot_formants(formants, os.path.join(args.outputs, f"{file_name}_formant.png"))
+    #plot_spec((log_mel_hq(wf_in) - log_mel_hq(wf_out)).abs(), os.path.join("./outputs/", f"{file_name}_diff.png"))
     torchaudio.save(os.path.join(args.outputs, f"{file_name}.wav"), src=wf, sample_rate=sr)
 
 mean_scores = sum(scores) / len(scores)
