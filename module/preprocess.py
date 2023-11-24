@@ -18,13 +18,13 @@ class MFCC(nn.Module):
 
 
 class LogMelSpectrogram(nn.Module):
-    def __init__(self):
+    def __init__(self, n_mels=80):
         super().__init__()
         self.to_mel = torchaudio.transforms.MelSpectrogram(
                 sample_rate=48000,
                 n_fft=3840,
                 hop_length=960,
-                n_mels=80
+                n_mels=n_mels
                 )
     
     def forward(self, x):

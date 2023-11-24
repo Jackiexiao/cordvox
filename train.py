@@ -93,6 +93,7 @@ SchedulerD = torch.optim.lr_scheduler.CosineAnnealingLR(OptD, 5000)
 step_count = 0
 
 log_mel = LogMelSpectrogram().to(device)
+log_mel_hq = LogMelSpectrogram(n_mels=192).to(device)
 
 for epoch in range(args.epoch):
     tqdm.write(f"Epoch #{epoch}")
@@ -112,7 +113,7 @@ for epoch in range(args.epoch):
             for logit in logits:
                 loss_adv += (logit ** 2).mean()
 
-            loss_mel = (log_mel(wave_fake) - log_mel(wave)).abs().mean()
+            loss_mel = (log_mel_hq(wave_fake) - log_mel_hq(wave)).abs().mean()
             loss_feat = D.feat_loss(cut_center_wav(wave_fake), cut_center_wav(wave))
 
             loss_g = loss_mel * args.mel + loss_feat * args.feat + loss_adv * args.adv
