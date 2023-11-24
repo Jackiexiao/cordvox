@@ -64,8 +64,8 @@ class NoiseGenerator(nn.Module):
             input_channels=256,
             upsample_rates=[10, 8, 4, 3],
             channels=[64, 32, 16, 8],
-            kernel_size=5,
-            num_layers=3
+            kernel_size=7,
+            num_layers=4,
             ):
         super().__init__()
         c0 = channels[0]
@@ -113,17 +113,39 @@ class FeatureExtractor(nn.Module):
         return self.stack(x)
 
 
+class PostFilter(nn.Module):
+    def __init__(
+            self,
+            channels=8,
+            kernel_size=7,
+            num_layers=4,
+            ):
+        super().__init__()
+        self.input_layer = nn.Conv1d(1, channels, 1, 1)
+        self.mid_layer = DilatedCausalConvStack(channels, channels, kernel_size, num_layers)
+        self.output_layer = nn.Conv1d(channels, 1, 1)
+
+    def forward(self, x):
+        res = x
+        x = self.input_layer(x)
+        x = self.mid_layer(x)
+        x = self.output_layer(x)
+        return x + res
+
+
 class Generator(nn.Module):
     def __init__(self):
         super().__init__()
         self.feature_extractor = FeatureExtractor()
         self.harmonic_oscillator = HarmonicOscillator()
         self.noise_generator = NoiseGenerator()
+        self.post_filter = PostFilter()
 
     def forward(self, x, f0, t0=0):
         x = self.feature_extractor(x)
         harmonics = self.harmonic_oscillator(x, f0)
         noise = self.noise_generator(x)
         wave = harmonics + noise
+        wave = self.post_filter(wave)
         wave = wave.squeeze(1)
         return wave
