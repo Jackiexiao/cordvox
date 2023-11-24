@@ -120,7 +120,7 @@ class PostFilter(nn.Module):
         x = self.input_layer(x)
         x = self.mid_layer(x)
         x = self.output_layer(x)
-        return res
+        return x + res
 
 
 class Generator(nn.Module):
