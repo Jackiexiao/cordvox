@@ -7,35 +7,31 @@ from module.common import CausalConvNeXtStack, CausalConv1d, DilatedCausalConvSt
 
 LRELU_SLOPE = 0.1
 
+
 class HarmonicOscillator(nn.Module):
     def __init__(self,
                  channels=256,
-                 num_harmonics=32,
+                 num_harmonics=64,
                  segment_size=960,
                  sample_rate=48000,
-                 f0_min=20):
+                 f0_max=4000,
+                 ):
         super().__init__()
         self.num_harmonics = num_harmonics
         self.segment_size = segment_size
         self.sample_rate = sample_rate
-        self.f0_min = f0_min
 
-        self.input_layer = nn.Conv1d(channels, num_harmonics+1, 1)
+        self.to_amps = nn.Conv1d(channels, num_harmonics, 1)
     
     # x: [N, input_channels, Lf] t0: float
-    def forward(self, x, t0=0):
+    def forward(self, x, f0, t0=0):
         N = x.shape[0] # batch size
         Nh = self.num_harmonics # number of harmonics
         Lf = x.shape[2] # frame length
         Lw = Lf * self.segment_size # wave length
 
-        x = self.input_layer(x)
-
-        # Split f0 and amplitudes
-        f0, amps = x.split([1, self.num_harmonics], dim=1)
-
-        # musical scale to frequency
-        f0 = 440 * 2 ** f0 + self.f0_min
+        # to amplitudes
+        amps = self.to_amps(x)
 
         # magnitude to amplitude
         amps = torch.exp(amps)
@@ -67,7 +63,7 @@ class NoiseGenerator(nn.Module):
             self,
             input_channels=256,
             upsample_rates=[10, 8, 4, 3],
-            channels=[32, 16, 8, 4],
+            channels=[64, 32, 16, 8],
             kernel_size=5,
             num_layers=3
             ):
@@ -124,10 +120,10 @@ class Generator(nn.Module):
         self.harmonic_oscillator = HarmonicOscillator()
         self.noise_generator = NoiseGenerator()
 
-    def forward(self, x, t0=0):
+    def forward(self, x, f0, t0=0):
         x = self.feature_extractor(x)
-        harmonics = self.harmonic_oscillator(x)
+        harmonics = self.harmonic_oscillator(x, f0)
         noise = self.noise_generator(x)
-        wave = harmonics #+ noise
+        wave = harmonics + noise
         wave = wave.squeeze(1)
         return wave

@@ -10,7 +10,7 @@ import torchaudio
 
 from tqdm import tqdm
 
-from module.dataset import WaveFileDirectory
+from module.dataset import WaveFileDirectoryWithF0
 from module.generator import Generator
 from module.discriminator import Discriminator
 from module.preprocess import LogMelSpectrogram
@@ -74,7 +74,7 @@ def cut_center_wav(x):
 device = torch.device(args.device)
 G, D = load_or_init_models(device)
 
-ds = WaveFileDirectory(
+ds = WaveFileDirectoryWithF0(
         [args.dataset],
         length=args.length,
         max_files=args.max_data
@@ -97,14 +97,15 @@ log_mel = LogMelSpectrogram().to(device)
 for epoch in range(args.epoch):
     tqdm.write(f"Epoch #{epoch}")
     bar = tqdm(total=len(ds))
-    for batch, wave in enumerate(dl):
+    for batch, (wave, f0) in enumerate(dl):
         wave = wave.to(device) * (torch.rand(wave.shape[0], 1, device=device) * 2)
         z = log_mel(wave)
+        f0 = f0.to(device)
         
         # Train G.
         OptG.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
-            wave_fake = G(z)
+            wave_fake = G(z, f0)
             
             loss_adv = 0
             logits = D.logits(cut_center_wav(wave_fake))

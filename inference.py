@@ -13,6 +13,7 @@ import numpy as np
 
 from module.generator import Generator
 from module.preprocess import LogMelSpectrogram
+from module.dataset import compute_f0
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--inputs', default="./inputs/")
@@ -57,18 +58,6 @@ def plot_spec(x, save_path="./spectrogram.png", log=False):
     plt.savefig(save_path, dpi=200)
     plt.close()
 
-def plot_formants(formants, save_path="./formants.png", sample_rate=48000):
-    plt.figure()
-    formants = formants[0]
-    formants = formants.chunk(formants.shape[0], dim=0)
-    for i, formant in enumerate(formants):
-        formant = formant[0]
-        formant = formant.cpu().numpy()
-        formant_human_scaled = 12 * np.log2(formant / 440) - 9 
-        plt.plot(formant_human_scaled)
-    plt.savefig(save_path, dpi=200)
-    plt.close()
-
 
 paths = []
 for fmt in ["wav", "mp3", "ogg"]:
@@ -96,6 +85,7 @@ for i, path in enumerate(paths):
     with torch.no_grad():
         tqdm.write(f"{i} / {n_files} : Inferencing {path}")
         bar = tqdm(total=len(chunks))
+        t0 = 0
         for chunk in chunks:
             chunk = chunk.squeeze(1)
 
@@ -105,7 +95,8 @@ for i, path in enumerate(paths):
 
             chunk_in = chunk[:, args.chunk:-args.chunk]
             
-            chunk = G(log_mel(chunk))
+            f0 = compute_f0(chunk)
+            chunk = G(log_mel(chunk), f0, t0)
             
             chunk = chunk[:, args.chunk:-args.chunk]
 
@@ -115,6 +106,8 @@ for i, path in enumerate(paths):
             result.append(chunk.to('cpu'))
             bar.set_description(f"Mel loss: {score}")
             bar.update(1)
+
+            t0 += chunk.shape[1] // 3 / 48000
 
         wf = torch.cat(result, dim=1)[:, :total_length]
 

@@ -45,7 +45,7 @@ class WaveFileDirectory(torch.utils.data.Dataset):
         return len(self.data)
 
 
-def compute_f0(wf, sample_rate=16000, segment_size=256, f0_min=20, f0_max=4096):
+def compute_f0_dio(wf, sample_rate=16000, segment_size=256, f0_min=20, f0_max=4096):
     if wf.ndim == 1:
         device = wf.device
         signal = wf.detach().cpu().numpy()
@@ -60,15 +60,15 @@ def compute_f0(wf, sample_rate=16000, segment_size=256, f0_min=20, f0_max=4096):
         return f0
     elif wf.ndim == 2:
         waves = wf.split(1, dim=0)
-        pitchs = [compute_f0(wave[0], sample_rate, segment_size) for wave in waves]
+        pitchs = [compute_f0_dio(wave[0], sample_rate, segment_size) for wave in waves]
         pitchs = torch.stack(pitchs, dim=0)
         return pitchs
 
 
-def compute_f0_fast(wf, sample_rate=48000, segment_size=960):
+def compute_f0(wf, sample_rate=48000, segment_size=960):
     l = wf.shape[1]
     wf = resample(wf, sample_rate, 8000)
-    pitchs = compute_f0(wf, 8000)
+    pitchs = compute_f0_dio(wf, 8000)
     return F.interpolate(pitchs, l // segment_size, mode='linear')
 
 
@@ -99,7 +99,7 @@ class WaveFileDirectoryWithF0(torch.utils.data.Dataset):
             for w in waves:
                 if w.shape[1] == length:
                     self.data.append(w[0])
-                    self.f0.append(compute_f0_fast(w, sample_rate, self.segsize)[0])
+                    self.f0.append(compute_f0(w, sample_rate, self.segsize)[0])
         self.length = length
         print(f"Loaded total {len(self.data)} data.")
 
