@@ -10,7 +10,7 @@ LRELU_SLOPE = 0.1
 
 class HarmonicOscillator(nn.Module):
     def __init__(self,
-                 channels=256,
+                 channels=512,
                  num_harmonics=64,
                  segment_size=960,
                  sample_rate=48000,
@@ -50,7 +50,7 @@ class HarmonicOscillator(nn.Module):
 
         # Generate harmonics
         dt = torch.cumsum(formants / self.sample_rate, dim=2)
-        harmonics = torch.sin(2 * math.pi * dt + t0) * amps
+        harmonics = torch.sin(2 * math.pi * dt) * amps
 
         # Sum all harmonics
         wave = harmonics.mean(dim=1, keepdim=True)
@@ -59,47 +59,37 @@ class HarmonicOscillator(nn.Module):
 
 
 class NoiseGenerator(nn.Module):
-    def __init__(
-            self,
-            input_channels=256,
-            upsample_rates=[10, 8, 4, 3],
-            channels=[64, 32, 16, 8],
-            kernel_size=7,
-            num_layers=4,
-            ):
+    def __init__(self,
+                 input_channels=512,
+                 n_fft=3840,
+                 hop_length=960):
         super().__init__()
-        c0 = channels[0]
-        c_last = channels[-1]
-        self.input_layer = CausalConv1d(input_channels, c0, kernel_size)
-        self.to_gains = nn.ModuleList([])
-        self.ups = nn.ModuleList([])
-        self.convs = nn.ModuleList([])
-        for i in range(len(upsample_rates)):
-            c = channels[i]
-            r = upsample_rates[i]
-            if i < len(upsample_rates) - 1:
-                c_next = channels[i+1]
-            else:
-                c_next = channels[-1]
-            self.ups.append(nn.ConvTranspose1d(c, c_next, r, r))
-            self.convs.append(DilatedCausalConvStack(c_next, c_next, kernel_size, num_layers))
-            self.to_gains.append(nn.Conv1d(c_next, 1, 1))
-        self.post = CausalConv1d(c_last, 1, kernel_size)
+        self.to_mag_phase = nn.Conv1d(input_channels, n_fft+2, 1)
+        self.hop_length = hop_length
+        self.n_fft = n_fft
+        self.pad = nn.ReflectionPad1d([1, 0])
+
+    def mag_phase(self, x):
+        x = self.pad(x)
+        x = self.to_mag_phase(x)
+        return x.chunk(2, dim=1)
 
     def forward(self, x):
-        x = self.input_layer(x)
-        for up, conv, to_gain in zip(self.ups, self.convs, self.to_gains):
-            x = F.leaky_relu(x, LRELU_SLOPE)
-            x = up(x)
-            skip = x
-            x = torch.randn_like(x) * to_gain(x)
-            x = conv(x) + skip
-        x = self.post(x)
-        return x
+        dtype = x.dtype
+        mag, phase = self.mag_phase(x)
+        mag = mag.to(torch.float)
+        phase = phase.to(torch.float)
+        mag = torch.clamp_max(mag, 6.0)
+        mag = torch.exp(mag)
+        phase = torch.cos(phase) + 1j * torch.sin(phase)
+        s = mag * phase
+        wf = torch.istft(s, self.n_fft, hop_length=self.hop_length)
+        wf = wf.unsqueeze(1)
+        return wf
 
 
 class FeatureExtractor(nn.Module):
-    def __init__(self, input_channels=80, output_channels=256, internal_channels=256, num_layers=8):
+    def __init__(self, input_channels=80, output_channels=512, internal_channels=512, num_layers=8):
         super().__init__()
         self.stack = CausalConvNeXtStack(
                 input_channels,
@@ -143,7 +133,7 @@ class Generator(nn.Module):
 
     def forward(self, x, f0, t0=0):
         x = self.feature_extractor(x)
-        harmonics = self.harmonic_oscillator(x, f0)
+        harmonics = self.harmonic_oscillator(x, f0, t0)
         noise = self.noise_generator(x)
         wave = harmonics + noise
         wave = self.post_filter(wave)

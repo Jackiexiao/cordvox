@@ -94,10 +94,10 @@ for i, path in enumerate(paths):
             chunk = chunk.to(device)
 
             chunk_in = chunk[:, args.chunk:-args.chunk]
-            
+
             f0 = compute_f0(chunk)
             chunk = G(log_mel(chunk), f0, t0)
-            
+
             chunk = chunk[:, args.chunk:-args.chunk]
 
             score = (log_mel(chunk_in) - log_mel(chunk)).abs().mean().item()
@@ -106,8 +106,8 @@ for i, path in enumerate(paths):
             result.append(chunk.to('cpu'))
             bar.set_description(f"Mel loss: {score}")
             bar.update(1)
-
-            t0 += chunk.shape[1] // 3 / 48000
+            
+            t0 += chunk.shape[1] / 48000
 
         wf = torch.cat(result, dim=1)[:, :total_length]
 
@@ -121,7 +121,7 @@ for i, path in enumerate(paths):
     file_name = f"{i}_{os.path.splitext(os.path.basename(path))[0]}"
     plot_spec(log_mel_hq(wf_in), os.path.join(args.outputs, f"{file_name}_input.png"))
     plot_spec(log_mel_hq(wf_out), os.path.join(args.outputs, f"{file_name}_output.png"))
-    #plot_spec((log_mel_hq(wf_in) - log_mel_hq(wf_out)).abs(), os.path.join("./outputs/", f"{file_name}_diff.png"))
+    plot_spec((log_mel_hq(wf_in) - log_mel_hq(wf_out)).abs(), os.path.join("./outputs/", f"{file_name}_diff.png"))
     torchaudio.save(os.path.join(args.outputs, f"{file_name}.wav"), src=wf, sample_rate=sr)
 
 mean_scores = sum(scores) / len(scores)
