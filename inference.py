@@ -20,7 +20,7 @@ parser.add_argument('-i', '--inputs', default="./inputs/")
 parser.add_argument('-o', '--outputs', default="./outputs/")
 parser.add_argument('-genp', '--generator-path', default="generator.pt")
 parser.add_argument('-d', '--device', default='cpu')
-parser.add_argument('-c', '--chunk', default=48000, type=int)
+parser.add_argument('-c', '--chunk', default=240000, type=int)
 parser.add_argument('-norm', '--normalize', default=False, type=bool)
 parser.add_argument('--noise', default=1, type=float)
 parser.add_argument('--harmonics', default=1, type=float)
@@ -119,9 +119,11 @@ for i, path in enumerate(paths):
     if args.normalize:
         wf = wf / wf.abs().max()
     file_name = f"{i}_{os.path.splitext(os.path.basename(path))[0]}"
-    plot_spec(log_mel_hq(wf_in), os.path.join(args.outputs, f"{file_name}_input.png"))
-    plot_spec(log_mel_hq(wf_out), os.path.join(args.outputs, f"{file_name}_output.png"))
-    plot_spec((log_mel_hq(wf_in) - log_mel_hq(wf_out)).abs(), os.path.join("./outputs/", f"{file_name}_diff.png"))
+    wf_in = wf_in.to(device)
+    wf_out = wf_out.to(device)
+    plot_spec(log_mel_hq(wf_in).cpu(), os.path.join(args.outputs, f"{file_name}_input.png"))
+    plot_spec(log_mel_hq(wf_out).cpu(), os.path.join(args.outputs, f"{file_name}_output.png"))
+    plot_spec((log_mel_hq(wf_in).cpu() - log_mel_hq(wf_out).cpu()).abs(), os.path.join("./outputs/", f"{file_name}_diff.png"))
     torchaudio.save(os.path.join(args.outputs, f"{file_name}.wav"), src=wf, sample_rate=sr)
 
 mean_scores = sum(scores) / len(scores)
