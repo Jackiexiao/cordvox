@@ -25,7 +25,6 @@ parser.add_argument('-norm', '--normalize', default=False, type=bool)
 parser.add_argument('--noise', default=1, type=float)
 parser.add_argument('--harmonics', default=1, type=float)
 parser.add_argument('-g', '--gain', default=0)
-parser.add_argument('--filter', default=1, type=float)
 
 args = parser.parse_args()
 
@@ -97,8 +96,7 @@ for i, path in enumerate(paths):
             chunk_in = chunk[:, args.chunk:-args.chunk]
 
             f0 = compute_f0(chunk)
-            chunk_f, chunk_r = G(log_mel(chunk), f0, t0, args.harmonics, args.noise)
-            chunk = chunk_f * args.filter + chunk_r * (1 - args.filter)
+            chunk = G(log_mel(chunk), f0, t0, args.harmonics, args.noise)
 
             chunk = chunk[:, args.chunk:-args.chunk]
 

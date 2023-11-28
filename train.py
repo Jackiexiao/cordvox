@@ -106,20 +106,15 @@ for epoch in range(args.epoch):
         # Train G.
         OptG.zero_grad()
         with torch.cuda.amp.autocast(enabled=args.fp16):
-            wave_fake, wave_fake_raw = G(z, f0)
+            wave_fake = G(z, f0)
             
             loss_adv = 0
             logits = D.logits(cut_center_wav(wave_fake))
             for logit in logits:
                 loss_adv += (logit ** 2).mean()
-            logits = D.logits(cut_center_wav(wave_fake_raw))
-            for logit in logits:
-                loss_adv += (logit ** 2).mean()
 
-            loss_mel = (log_mel_hq(wave_fake) - log_mel_hq(wave)).abs().mean() +\
-                    (log_mel_hq(wave_fake_raw) - log_mel_hq(wave)).abs().mean()
-            loss_feat = D.feat_loss(cut_center_wav(wave_fake), cut_center_wav(wave)) +\
-                    D.feat_loss(cut_center_wav(wave_fake_raw), cut_center_wav(wave)) 
+            loss_mel = (log_mel_hq(wave_fake) - log_mel_hq(wave)).abs().mean()
+            loss_feat = D.feat_loss(cut_center_wav(wave_fake), cut_center_wav(wave))
 
             loss_g = loss_mel * args.mel + loss_feat * args.feat + loss_adv * args.adv
 
