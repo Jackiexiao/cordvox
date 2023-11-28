@@ -171,11 +171,11 @@ class Generator(nn.Module):
         self.noise_generator = NoiseGenerator()
         self.post_filter = PostFilter()
 
-    def forward(self, x, f0, t0=0):
+    def forward(self, x, f0, t0=0, harmonics_scale=1, noise_scale=1):
         x = self.feature_extractor(x)
         harmonics = self.harmonic_oscillator(x, f0, t0)
         noise = self.noise_generator(x)
-        wave_raw = harmonics + noise
+        wave_raw = harmonics * harmonics_scale + noise * noise_scale
         wave_filterd = self.post_filter(wave_raw, x)
         wave_raw = wave_raw.squeeze(1)
         wave_filterd = wave_filterd.squeeze(1)
