@@ -159,8 +159,8 @@ class PostFilter(nn.Module):
     def forward(self, wave, x):
         out = 0
         for u in self.units:
-            out += u(wave, x) + out
-        return out
+            out += u(wave, x)
+        return out + wave
 
 
 class Generator(nn.Module):
