@@ -133,10 +133,9 @@ class FilterUnit(nn.Module):
         wave = self.wave_in(wave)
         x = self.feat_in(x)
         for l in self.mid_layers:
-            res = wave
             wave = F.gelu(wave)
             wave = wave * F.interpolate(x, wave.shape[2])
-            wave = l(wave) + res
+            wave = l(wave)
         wave = self.wave_out(wave)
         wave = wave[:, :, :L]
         return wave
@@ -146,8 +145,8 @@ class PostFilter(nn.Module):
     def __init__(
             self,
             input_channels=512,
-            channels=[16, 16, 32, 64],
-            strides=[8, 12, 96, 128],
+            channels=[8, 16, 32, 64],
+            strides=[4, 12, 96, 128],
             num_layers=4,
             kernel_size=5,
             ):
