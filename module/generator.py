@@ -145,8 +145,8 @@ class PostFilter(nn.Module):
     def __init__(
             self,
             input_channels=512,
-            channels=[8, 16, 32, 64],
-            strides=[4, 12, 96, 128],
+            channels=[8, 16, 32, 64, 64],
+            strides=[1, 4, 12, 96, 128],
             num_layers=4,
             kernel_size=5,
             ):
