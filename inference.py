@@ -22,7 +22,6 @@ parser.add_argument('-genp', '--generator-path', default="generator.pt")
 parser.add_argument('-d', '--device', default='cpu')
 parser.add_argument('-c', '--chunk', default=240000, type=int)
 parser.add_argument('-norm', '--normalize', default=False, type=bool)
-parser.add_argument('--noise', default=1, type=float)
 parser.add_argument('--harmonics', default=1, type=float)
 parser.add_argument('-g', '--gain', default=0)
 
@@ -96,7 +95,7 @@ for i, path in enumerate(paths):
             chunk_in = chunk[:, args.chunk:-args.chunk]
 
             f0 = compute_f0(chunk)
-            chunk = G(log_mel(chunk), f0, t0, args.harmonics, args.noise)
+            chunk = G(log_mel(chunk), f0, t0, args.harmonics)
 
             chunk = chunk[:, args.chunk:-args.chunk]
 

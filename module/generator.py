@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-from module.common import CausalConvNeXtStack, CausalConv1d, DilatedCausalConvStack
+from module.common import CausalConvNeXtStack, CausalConv1d, DilatedCausalConvStack, AdaptiveConvNeXt1d
 
 LRELU_SLOPE = 0.1
 
@@ -13,7 +13,7 @@ class HarmonicOscillator(nn.Module):
                  input_channels=80,
                  num_layers=4,
                  channels=256,
-                 num_harmonics=16,
+                 num_harmonics=64,
                  segment_size=960,
                  sample_rate=48000,
                  f0_max=4000,
@@ -65,13 +65,20 @@ class HarmonicOscillator(nn.Module):
 
 class Filter(nn.Module):
     def __init__(self,
+                 input_channels=80,
                  channels=512,
                  n_fft=3840,
                  hop_length=960,
                  kernel_size=7,
                  num_layers=8):
         super().__init__()
-        self.stack = CausalConvNeXtStack(n_fft//2+1, channels, channels*2, kernel_size, n_fft+2, num_layers)
+        self.condition_in = nn.Conv1d(input_channels, channels, 1, 1, 0)
+        self.spec_in = nn.Conv1d(n_fft//2+1, channels, 1, 1, 0)
+        self.mid_layers = nn.ModuleList([])
+        for _ in range(num_layers):
+            self.mid_layers.append(
+                    AdaptiveConvNeXt1d(channels, channels*2, channels))
+        self.output_layer = nn.Conv1d(channels, n_fft+2, 1)
         self.hop_length = hop_length
         self.n_fft = n_fft
         self.pad = nn.ReflectionPad1d([1, 0])
@@ -79,15 +86,20 @@ class Filter(nn.Module):
     def spectrogram(self, x):
         return torch.stft(x, self.n_fft, self.hop_length, return_complex=True).abs()[:, :, 1:]
 
-    def mag_phase(self, x):
-        x = self.pad(x)
-        x = self.stack(x)
+    def mag_phase(self, s, c):
+        s = self.spec_in(s)
+        c = self.condition_in(c)
+        s = self.pad(s)
+        c = self.pad(c)
+        for l in self.mid_layers:
+            s = l(s, c)
+        x = self.output_layer(s)
         return x.chunk(2, dim=1)
 
-    def forward(self, x):
+    def forward(self, harmonics, x):
         dtype = x.dtype
-        x = self.spectrogram(x)
-        mag, phase = self.mag_phase(x)
+        spec = self.spectrogram(harmonics)
+        mag, phase = self.mag_phase(spec, x)
         mag = mag.to(torch.float)
         phase = phase.to(torch.float)
         mag = torch.clamp_max(mag, 6.0)
@@ -104,8 +116,8 @@ class Generator(nn.Module):
         self.harmonic_oscillator = HarmonicOscillator()
         self.filter = Filter()
 
-    def forward(self, x, f0, t0=0, harmonics_scale=1, noise_scale=1):
-        x = self.harmonic_oscillator(x, f0, t0)
-        x = x.squeeze(1)
-        x = self.filter(x)
-        return x
+    def forward(self, x, f0, t0=0, harmonics_scale=1):
+        harmonics = self.harmonic_oscillator(x, f0, t0) * harmonics_scale
+        harmonics = harmonics.squeeze(1)
+        out = self.filter(harmonics, x)
+        return out

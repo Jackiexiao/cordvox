@@ -4,6 +4,9 @@ import torch.nn.functional as F
 
 LRELU_SLOPE = 0.1
 
+def get_padding(kernel_size, dilation=1):
+    return int((kernel_size*dilation - dilation)/2)
+
 
 class ChannelNorm(nn.Module):
     def __init__(self, channels, eps=1e-4):
@@ -87,3 +90,38 @@ class DilatedCausalConvStack(nn.Module):
             F.leaky_relu(x, LRELU_SLOPE)
             x = c(x)
         return x
+
+
+class AdaptiveChannelNorm(nn.Module):
+    def __init__(self, channels, condition_emb, eps=1e-4):
+        super().__init__()
+        self.shift = nn.Conv1d(condition_emb, channels, 1, 1, 0)
+        self.scale = nn.Conv1d(condition_emb, channels, 1, 1, 0)
+        self.eps = eps
+
+    def forward(self, x, p):
+        mu = x.mean(dim=1, keepdim=True)
+        sigma = x.std(dim=1, keepdim=True) + self.eps
+        x = (x - mu) / sigma
+        x = x * self.scale(p) + self.shift(p)
+        return x
+
+
+class AdaptiveConvNeXt1d(nn.Module):
+    def __init__(self, channels=512, hidden_channels=1536, condition_emb=512, kernel_size=7, scale=1, dilation=1):
+        super().__init__()
+        self.dw_conv = nn.Conv1d(channels, channels, kernel_size, padding=get_padding(kernel_size, dilation), groups=channels)
+        self.norm = AdaptiveChannelNorm(channels, condition_emb)
+        self.pw_conv1 = nn.Conv1d(channels, hidden_channels, 1)
+        self.pw_conv2 = nn.Conv1d(hidden_channels, channels, 1)
+        self.scale = nn.Parameter(torch.ones(1, channels, 1) * scale)
+
+    def forward(self, x, p):
+        res = x
+        x = self.dw_conv(x)
+        x = self.norm(x, p)
+        x = self.pw_conv1(x)
+        x = F.gelu(x)
+        x = self.pw_conv2(x)
+        x = x * self.scale
+        return x + res
