@@ -30,6 +30,9 @@ class HarmonicOscillator(nn.Module):
         Lf = x.shape[2] # frame length
         Lw = Lf * self.segment_size # wave length
 
+        # Ignore lower than 20Hz
+        f0 = f0.clamp_min(20)
+
         # to amplitudes
         amps = self.to_amps(x)
 
