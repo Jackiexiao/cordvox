@@ -98,7 +98,7 @@ class Filter(nn.Module):
             self,
             feat_channels=512,
             rates=[3, 5, 8, 8],
-            channels=[32, 64, 128, 256],
+            channels=[8, 32, 64, 128],
             kernel_size=5,
             num_layers=3
             ):
