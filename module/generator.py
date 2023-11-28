@@ -133,9 +133,10 @@ class FilterUnit(nn.Module):
         wave = self.wave_in(wave)
         x = self.feat_in(x)
         for l in self.mid_layers:
+            res = wave
             wave = F.gelu(wave)
             wave = wave * F.interpolate(x, wave.shape[2])
-            wave = l(wave)
+            wave = l(wave) + res
         wave = self.wave_out(wave)
         wave = wave[:, :, :L]
         return wave
@@ -160,7 +161,7 @@ class PostFilter(nn.Module):
         out = 0
         for u in self.units:
             out += u(wave, x)
-        return out + wave
+        return out
 
 
 class Generator(nn.Module):
@@ -175,7 +176,8 @@ class Generator(nn.Module):
         x = self.feature_extractor(x)
         harmonics = self.harmonic_oscillator(x, f0, t0)
         noise = self.noise_generator(x)
-        wave = harmonics + noise
-        wave = self.post_filter(wave, x)
-        wave = wave.squeeze(1)
-        return wave
+        wave_raw = harmonics + noise
+        wave_filterd = self.post_filter(wave_raw, x)
+        wave_raw = wave_raw.squeeze(1)
+        wave_filterd = wave_filterd.squeeze(1)
+        return wave_filterd, wave_raw

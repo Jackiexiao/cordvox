@@ -96,7 +96,7 @@ for i, path in enumerate(paths):
             chunk_in = chunk[:, args.chunk:-args.chunk]
 
             f0 = compute_f0(chunk)
-            chunk = G(log_mel(chunk), f0, t0)
+            chunk, _ = G(log_mel(chunk), f0, t0)
 
             chunk = chunk[:, args.chunk:-args.chunk]
 
