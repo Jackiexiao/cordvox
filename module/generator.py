@@ -146,8 +146,8 @@ class PostFilter(nn.Module):
     def __init__(
             self,
             input_channels=512,
-            channels=[16, 32, 32, 64],
-            strides=[8, 16, 64, 256],
+            channels=[16, 16, 32, 64],
+            strides=[8, 12, 96, 128],
             num_layers=4,
             kernel_size=5,
             ):
@@ -160,7 +160,7 @@ class PostFilter(nn.Module):
     def forward(self, wave, x):
         out = 0
         for u in self.units:
-            out += u(wave, x)
+            out += u(wave, x) + out
         return out
 
 
