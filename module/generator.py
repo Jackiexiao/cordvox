@@ -103,24 +103,64 @@ class FeatureExtractor(nn.Module):
         return self.stack(x)
 
 
+class FilterUnit(nn.Module):
+    def __init__(
+            self,
+            feat_channels=512,
+            channels=32,
+            stride=32,
+            num_layers=4,
+            kernel_size=5,
+            ):
+        super().__init__()
+        self.stride = stride
+        self.feat_in = nn.Conv1d(feat_channels, channels, 1)
+        self.wave_in = nn.Conv1d(1, channels, stride*2, stride, stride//2)
+        self.mid_layers = nn.ModuleList([])
+        for i in range(num_layers):
+            self.mid_layers.append(
+                    CausalConv1d(channels, channels, kernel_size, 2**i))
+        self.wave_out = nn.ConvTranspose1d(channels, 1, stride*2, stride, stride//2)
+    
+    def forward(self, wave, x):
+        L = wave.shape[2]
+        N = wave.shape[0]
+
+        if L % self.stride != 0:
+            pad_len = self.stride - (L % self.stride)
+            wave = torch.cat([wave, torch.zeros(N, 1, pad_len, device=wave.device)], dim=2)
+        
+        wave = self.wave_in(wave)
+        x = self.feat_in(x)
+        for l in self.mid_layers:
+            wave = F.gelu(wave)
+            wave = wave * F.interpolate(x, wave.shape[2])
+            wave = l(wave)
+        wave = self.wave_out(wave)
+        wave = wave[:, :, :L]
+        return wave
+
+
 class PostFilter(nn.Module):
     def __init__(
             self,
-            channels=8,
-            kernel_size=7,
+            input_channels=512,
+            channels=[16, 32, 32, 64],
+            strides=[8, 16, 64, 256],
             num_layers=4,
+            kernel_size=5,
             ):
         super().__init__()
-        self.input_layer = nn.Conv1d(1, channels, 1, 1)
-        self.mid_layer = DilatedCausalConvStack(channels, channels, kernel_size, num_layers)
-        self.output_layer = nn.Conv1d(channels, 1, 1)
+        self.units = nn.ModuleList([])
+        for s, c in zip(strides, channels):
+            self.units.append(
+                    FilterUnit(input_channels, c, s, num_layers, kernel_size))
 
-    def forward(self, x):
-        res = x
-        x = self.input_layer(x)
-        x = self.mid_layer(x)
-        x = self.output_layer(x)
-        return x + res
+    def forward(self, wave, x):
+        out = 0
+        for u in self.units:
+            out += u(wave, x)
+        return out + wave
 
 
 class Generator(nn.Module):
@@ -136,6 +176,6 @@ class Generator(nn.Module):
         harmonics = self.harmonic_oscillator(x, f0, t0)
         noise = self.noise_generator(x)
         wave = harmonics + noise
-        wave = self.post_filter(wave)
+        wave = self.post_filter(wave, x)
         wave = wave.squeeze(1)
         return wave
