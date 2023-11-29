@@ -174,3 +174,7 @@ inputs/*
 outputs/*
 targets/*
 *.onnx
+
+# MacOS
+.DS_Store
+*.DS_Store
