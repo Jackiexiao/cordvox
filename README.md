@@ -9,4 +9,4 @@ a neuwal vocoder for next-generation voice conversion
 - able to realtime inference on consumer CPU.
 
 ## Architecture
-![architecture](https://github.com/uthree/cordvox/blob/main/documents/images/architecture.png)
+![architecture](https://github.com/uthree/cordvox/blob/main/documents/architecture.png)
